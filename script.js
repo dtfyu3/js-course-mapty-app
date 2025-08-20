@@ -147,7 +147,10 @@ class App {
     }
     #getPosition() {
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(this.#loadMap.bind(this), this.#loadMap.bind(this, {coords:{ latitude: 51.505, longitude: -0.09 }}) );
+            navigator.geolocation.getCurrentPosition(this.#loadMap.bind(this), () => {
+                alert(`I can't get your location without your permission. Loading map with default location.`);
+                this.#loadMap({ coords: { latitude: 51.505, longitude: -0.09 } });
+            } );
         }
 
     }
