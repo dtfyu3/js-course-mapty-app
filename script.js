@@ -147,9 +147,7 @@ class App {
     }
     #getPosition() {
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(this.#loadMap.bind(this), function () {
-                alert('!');
-            })
+            navigator.geolocation.getCurrentPosition(this.#loadMap.bind(this), this.#loadMap.bind(this, {coords:{ latitude: 51.505, longitude: -0.09 }}) );
         }
 
     }
