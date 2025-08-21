@@ -69,7 +69,7 @@ a:visited {
 .workout {
   background-color: var(--color-dark--2);
   border-radius: 5px;
-  padding: 1.5rem 2.25rem;
+  padding: 4rem 2.25rem 1.5rem 2.25rem;
   margin-bottom: 1.75rem;
   cursor: pointer;
   position: relative;
@@ -138,7 +138,9 @@ a:visited {
   margin-bottom: 0;
   opacity: 0;
 }
-
+.hidden{
+  display: none;
+}
 .form__row {
   display: flex;
   align-items: center;
@@ -174,7 +176,7 @@ a:visited {
   display: none;
 }
 
-.workout__close-btn, .workout__edit-btn, .workout__route-btn {
+.workout__close-btn, .workout__edit-btn, .workout__route-btn, .workout__view-btn {
   position: absolute;
   top: 0.5rem;
   right: 1rem;
@@ -199,6 +201,13 @@ a:visited {
   top: 0.8rem;
 }
 
+.workout__view-btn {
+  left: 1rem;
+  right: auto;
+  font-size: 1.8rem;
+  top: 0.8rem;
+}
+
 .workout__route-btn {
   right: 6rem;
   font-size: 1.6rem;
@@ -207,7 +216,8 @@ a:visited {
 
 .workout__close-btn:hover,
 .workout__edit-btn:hover,
-.workout__route-btn:hover {
+.workout__route-btn:hover,
+.workout__view-btn:hover {
   color: #fff;
 }
 
@@ -298,13 +308,13 @@ button {
   display: inline-block;
 }
 
-.fit {
+.fit, .hide-all {
   background-color: var(--color-dark--1);
   color: var(--color-light--2);
   padding: 5px;
   border-radius: 5px;
   width: fit-content;
-  margin: 0 auto;
+  /* margin: 0 auto; */
   margin-top: 5px;
   cursor: pointer;
   transition: all 0.1s;
@@ -312,13 +322,19 @@ button {
   color: var(--color-light--2);
   font-size: 1.5rem;
   font-weight: 600;
+  display: inline-block;
 }
-
-.fit:hover {
+.fit{
+  margin-left: 10px;
+}
+.fit:hover, .hide-all:hover {
   transform: scale(1.1);
 }
 .leaflet-control-layers-expanded,
 .leaflet-control-layers-list {
   font-size: 16px;
 
+}
+.list-buttons{
+  text-align: center;
 }
