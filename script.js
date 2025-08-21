@@ -50,6 +50,7 @@ class Workout {
     id = (Date.now().toString()).slice(-10);
     clicks = 0;
     path;
+    calc = function () { };
     constructor(coords, distance, duration) {
         this.coords = coords;
         this.distance = distance;
@@ -65,10 +66,19 @@ class Workout {
     click() {
         this.clicks++;
     }
+    update(fields) {
+        Object.entries(fields).forEach(e => {
+            if (this[e[0]]) {
+                this[e[0]] = e[1];
+            }
+        });
+        this.calc();
+    }
 }
 
 class Running extends Workout {
     type = 'running';
+    calc = this.calcPace;
     constructor(coords, distance, duration, cadence) {
         super(coords, distance, duration);
         this.cadence = cadence;
@@ -93,6 +103,7 @@ class Running extends Workout {
 
 class Cycling extends Workout {
     type = 'cycling';
+    calc = this.calcSpeed;
     constructor(coords, distance, duration, elevationGain) {
         super(coords, distance, duration);
         this.elevationGain = elevationGain;
@@ -142,28 +153,23 @@ class App {
         form.addEventListener('submit', this.#handleSubmit.bind(this));
         inputType.addEventListener('change', this.#toggleElevationField);
         containerWorkouts.addEventListener('click', this.#handle_workout_ref);
-        sidebar.addEventListener('click', this.#fitAllMarkers.bind(this));
+        sidebar.addEventListener('click', this.#handleSidebarClick.bind(this));
         window.addEventListener('keydown', this.#handleEscapePress.bind(this));
     }
     #getPosition() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(this.#loadMap.bind(this), () => {
                 alert(`I can't get your location without your permission. Loading map with default location.`);
-                this.#loadMap({ coords: { latitude: 51.505, longitude: -0.09 } });
-            } );
+                this.#loadMap({ coords: { latitude: 55.751244, longitude: 37.618423 } });
+            });
         }
 
     }
     #loadMap(position) {
         const { longitude, latitude } = position.coords;
         const coords = [latitude, longitude];
-        const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; <a hmap_ref="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        });
         this.#layersLinks.forEach(link => {
             const layer = this.#buildLayer(link);
-            // this.#layerControl.addBaseLayer(layer, link.name)
             this.#layers[link.name] = layer;
         });
         this.#map = L.map('map', { maxZoom: this.#maxZoom, layers: this.#layers['OpenStreetMap'] }).setView(coords, this.#mapZoom); //inittin default layer as OpenStreetMap
@@ -204,8 +210,6 @@ class App {
             inputElevation.closest('.form__row').classList.remove('form__row--hidden');
             inputCadence.closest('.form__row').classList.add('form__row--hidden');
         }
-        // inputElevation.closest('.form__row').classList.toggle('form__row--hidden');
-        // inputCadence.closest('.form__row').classList.toggle('form__row--hidden');
     }
     #handleSubmit(e) {
         e.preventDefault();
@@ -275,18 +279,7 @@ class App {
             if (!this.#checkInputs(type, duration, distance, elevation)) return alert('Positive only');
         }
         if (type === workout.type) { //same type
-            workout.distance = distance;
-            workout.duration = duration;
-
-            if (type === 'running') {
-                workout.cadence = cadence;
-                workout.calcPace();
-
-            }
-            else {
-                workout.elevationGain = elevation;
-                workout.calcSpeed();
-            }
+            workout.update({ distance: distance, duration: duration, cadence: cadence, elevationGain: elevation });
             workoutElement.innerHTML = '';
             workoutElement.innerHTML = this.#createWorkoutElement(workout, false);
         }
@@ -325,7 +318,6 @@ class App {
             }))
             .setPopupContent(`${icon} ${workout.description}`)
             .openPopup();
-        // const oldMarker = this.#markers.get(workout.id);
         this.#markers.set(workout.id, { marker: marker, start: '', finish: '' });
     }
     #renderWorkoutPath(w) {
@@ -336,14 +328,14 @@ class App {
         this.#createPathMarkers(w, w.path, { startIcon, finishIcon });
 
     }
-    #createPathMarkers(w, coords, icons, addToMap=true) {
+    #createPathMarkers(w, coords, icons, addToMap = true) {
         const path = this.#createPath(coords, w.id);
         path.addTo(this.#map);
         const center = path.getBounds().getCenter();
         const { startIcon, finishIcon } = icons;
         const startMarker = L.marker(coords[0], { icon: startIcon });
         const finishMarker = L.marker(coords[coords.length - 1], { icon: finishIcon });
-        if(addToMap){
+        if (addToMap) {
             startMarker.addTo(this.#map);
             finishMarker.addTo(this.#map);
         }
@@ -352,6 +344,7 @@ class App {
         oldMarker.finish = finishMarker;
         oldMarker.marker._latlng = center;
         this.#markers.set(w.id, oldMarker);
+        return path;
     }
     #editWorkoutMarker(workout) {
         const marker = this.#markers.get(workout.id).marker;
@@ -364,7 +357,7 @@ class App {
         const html = this.#createWorkoutElement(workout);
         form.insertAdjacentHTML('afterend', html);
         if (!document.querySelector('.fit')) {
-            containerWorkouts.insertAdjacentHTML('afterend', '<button class="fit">Fit all markers</button>')
+            containerWorkouts.insertAdjacentHTML('afterend', '<div class="list-buttons"><button class="hide-all">Hide all workouts</button><button class="fit">Fit all markers</button></div>')
         }
     }
     #createWorkoutElement(workout, liNeeded = true) {
@@ -391,6 +384,8 @@ class App {
                 break;
         }
         let html = `${header}
+         <button class="workout__view-btn" title="Hide on map"><i class="fa-regular fa-eye fa-xs"></i></button>
+         <button class="workout__view-btn hidden" title="View on map"><i class="fa-regular fa-eye-slash fa-xs"></i></button>
          <button class="workout__close-btn" title="Delete workout">&times;</button>
          <button class="workout__edit-btn" title="Edit workout"><i class="fa-solid fa-pencil fa-xs"></i></button>
          <button class="workout__route-btn" title="Record a path"><i class="fa-solid fa-route fa-xs"></i></button>
@@ -425,6 +420,7 @@ class App {
     #handleWorkoutClick(e) {
         const el = e.target.closest('.workout');
         if (!el) return;
+        const workout = this.#workouts.find(workout => workout.id === el.dataset['id']);
         if (e.target.closest('.workout__close-btn'))
             this.#deleteWorkout(el);
         else if (e.target.closest('.workout__edit-btn')) {
@@ -434,9 +430,7 @@ class App {
             const controls = el.querySelector('.workout__route-controls');
             controls.classList.toggle('hidden');
             this.#isRouting = !this.#isRouting;
-            const workout = this.#workouts.find(workout => workout.id === el.dataset['id']);
             this.#routingWorkoutId = workout.id;
-            // this.#hideOrShowMarkers();
             this.#startPath(e);
         }
 
@@ -444,11 +438,23 @@ class App {
             this.#confirmAPath(e);
         }
         else if (e.target.closest('.workout__route-reset-btn')) this.#handleResetPathClick(e); //reset path
+        else if (e.target.closest('.workout__view-btn')) { //hide/show workout
+            this.#toggleMarkers(this.#markers.get(el.dataset['id']));
+            this.#toggleWorkoutPath(workout);
+        }
         else {
             const workout = this.#workouts.find(workout => workout.id === el.dataset['id']);
             this.#moveToPopUp(workout);
         }
 
+    }
+    #handleSidebarClick(e) {
+        if (!e.target.closest('.list-buttons')) return;
+        if (e.target.closest('.fit')) this.#fitAllMarkers(e);
+        else if (e.target.closest('.hide-all')) {
+            if (this.#isRouting) return;
+            this.#toggleAllWorkouts();
+        }
     }
     #handleEditClick(el) {
         if (this.#isRouting) return;
@@ -477,13 +483,14 @@ class App {
         const workoutIdx = this.#workouts.findIndex(workout => workout.id === el.dataset['id']);
         if (workoutIdx === -1) return;
 
-        this.#workouts.splice(workoutIdx, 1);
-        const marker = this.#markers.get(el.dataset['id']).marker;
+        const marker = this.#markers.get(el.dataset['id']);
         el.remove();
         if (marker) {
-            this.#map.removeLayer(marker);
+            Object.values(marker).forEach(m => this.#map.removeLayer(m));
             this.#markers.delete(el.dataset['id']);
         }
+        this.#deleteWorkoutPath(this.#workouts[workoutIdx]);
+        this.#workouts.splice(workoutIdx, 1);
         this.#setLocalStorage();
         if (containerWorkouts.querySelectorAll('.workout').length === 0) {
             document.querySelector('.fit').remove();
@@ -497,11 +504,11 @@ class App {
                 duration: 1,
             }
         });
-        // workout.click();
     }
 
-    #hideOrShowMarkers() {
-        const markers = [...this.#markers.values()].map(m => [...(Object.values(m,))].filter(v => v != '')).flat();
+    #toggleMarkers(...inputs) {
+        let markers;
+        markers = [...(inputs.length === 0 ? this.#markers.values() : inputs)].map(m => [...(Object.values(m,))].filter(v => v != '')).flat();
         markers.forEach(m => {
             if (this.#map.hasLayer(m)) {
                 this.#map.removeLayer(m)
@@ -509,15 +516,53 @@ class App {
             else { this.#map.addLayer(m) }
         })
     }
+    #toggleWorkoutPath(...workouts) {
+        if (workouts.length === 0) workouts = this.#workouts;
+        workouts.forEach(workout => {
+            const workoutElement = containerWorkouts.querySelector(`.workout[data-id="${workout.id}"]`);
+            workoutElement.querySelectorAll('.workout__view-btn').forEach(b => b.classList.toggle('hidden'));
+            if (workout.path) {
+                const id = Object.values(this.#map._layers).find(l => l.options.id === workout.id);
+                if (id._path) {
+                    const cl = L.DomUtil.getClass(id._path);
+                    cl.includes('hidden') ? L.DomUtil.removeClass(id._path, 'hidden') : L.DomUtil.addClass(id._path, 'hidden');
+                }
+            }
+        })
+    }
+    #toggleAllWorkouts() {
+        this.#toggleMarkers();
+        this.#toggleWorkoutPath();
+    }
+
+    #hideAllWorkouts() {
+        this.#workouts.forEach(workout => {
+            const workoutElement = containerWorkouts.querySelector(`.workout[data-id="${workout.id}"]`);
+            workoutElement.querySelectorAll('.workout__view-btn').forEach(b => b.classList.toggle('hidden'));
+            if (workout.path) {
+                const id = Object.values(this.#map._layers).find(l => l.options.id === workout.id);
+                if (id._path) {
+                    L.DomUtil.addClass(id._path, 'hidden');
+                }
+            }
+        });
+
+        hideAllMarkers.bind(this)();
+
+        function hideAllMarkers() {
+            const markers = [...this.#markers.values()].map(m => [...(Object.values(m,))].filter(v => v != '')).flat();
+            markers.forEach(m => {
+                if (this.#map.hasLayer(m)) this.#map.removeLayer(m)
+            })
+        }
+    }
     #startPath(e) {
         if (!this.#isRouting) {
-            // this.#isRouting = false;
             this.#handleResetPathClick(e);
             return;
         }
         if (!form.classList.contains('hidden')) this.#hideForm();
-        this.#hideOrShowMarkers();
-        // const initialMapOnEvent = this.#map.on('click', this.#showForm.bind(this));
+        this.#hideAllWorkouts();
         this.#map.off('click', this.#map_ref);
         this.#map.on('click', this.#add_point_to_map_ref);
         document.querySelector('.leaflet-container').style.cursor = 'crosshair';
@@ -529,32 +574,67 @@ class App {
                 duration: 1,
             }
         });
-
-        // containerWorkouts.removeEventListener('click', this.#handle_workout_ref);
-        // containerWorkouts.addEventListener('click',function(e){
-
-        // });
-        // this.#map.on('click', this.#addPointToPath.bind(this));
     }
     #addPointToPath(mapE) {
-        // console.log(mapE);
         const { lat, lng } = mapE.latlng;
         const circle = L.circle([lat, lng]).addTo(this.#map);
         this.#path.push(circle);
     }
     #confirmAPath(e) {
+        const workout = this.#workouts.find(w => w.id === this.#routingWorkoutId);
         if (this.#path.length < 2) alert('Pick at least two points on the map!');
         const coords = this.#path.map(el => {
             const { lat, lng } = el._latlng;
             return [lat, lng];
         });
-        const path = this.#createPath(coords, this.#routingWorkoutId);
-        // let sum = 0;
-        // for (let i = 0; i < coords.length - 1; i++) {
-        //     const distance = this.#getDistance(coords[i], coords[i + 1]);
-        //     sum += distance;
-        // }
-        // console.log(sum);
+        const distance = this.#calculatePathDistance(coords);
+
+        const startIcon = this.#createIcon('icons/start.png');
+        const finishIcon = this.#createIcon('icons/finish.png');
+        const path = this.#createPathMarkers(workout, coords, { startIcon, finishIcon }, false);
+        const center = path.getBounds().getCenter();
+
+
+        workout.distance = distance.toFixed(2);
+        const workoutElement = containerWorkouts.querySelector(`.workout[data-id="${workout.id}"]`);
+
+
+        workout.coords = center;
+        this.#deleteWorkoutPath(workout);
+        workout.path = path._latlngs;
+        this.#setLocalStorage();
+        this.#handleResetPathClick(e);
+        workoutElement.innerHTML = '';
+        workoutElement.innerHTML = this.#createWorkoutElement(workout, false);
+    }
+    #deleteWorkoutPath(workout) {
+        if (workout.path) {
+            const id = Object.values(this.#map._layers).find(l => l.options.id === workout.id);
+            if (id) {
+                this.#map.removeLayer(id);
+            }
+            workout.path = null;
+        }
+    }
+    #calculatePathDistance(coords) {
+        function getDistance(origin, destination) {
+            function toRadian(degree) {
+                return degree * Math.PI / 180;
+            }
+
+            const lon1 = toRadian(origin[1]),
+                lat1 = toRadian(origin[0]),
+                lon2 = toRadian(destination[1]),
+                lat2 = toRadian(destination[0]);
+            const deltaLat = lat2 - lat1;
+            const deltaLon = lon2 - lon1;
+            const a = Math.pow(Math.sin(deltaLat / 2), 2) + Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(deltaLon / 2), 2);
+            const c = 2 * Math.asin(Math.sqrt(a));
+            const EARTH_RADIUS = 6371;
+            return c * EARTH_RADIUS * 1000;
+
+        }
+
         const distance = coords.reduce((acc, cur) => {
             if (!acc.from) {
                 acc.from = cur;
@@ -562,52 +642,13 @@ class App {
             }
             else {
                 acc.to = cur;
-                acc.sum += this.#getDistance(acc.from, acc.to);
+                acc.sum += getDistance(acc.from, acc.to);
                 acc.from = acc.to;
                 return acc;
             }
-        }, { sum: 0, from: null, to: null })
+        }, { sum: 0, from: null, to: null });
 
-        path.addTo(this.#map);
-        const startIcon = this.#createIcon('icons/start.png');
-        const finishIcon = this.#createIcon('icons/finish.png');
-        const center = path.getBounds().getCenter();
-        const workout = this.#workouts.find(w => w.id === this.#routingWorkoutId);
-
-        workout.distance = (distance.sum / 1000).toFixed(2);
-        workout.calcSpeed && workout.calcSpeed() || (workout.calcPace && workout.calcPace()); 
-        const workoutElement = containerWorkouts.querySelector(`.workout[data-id="${workout.id}"]`);
-        
-        this.#createPathMarkers(workout, coords, { startIcon, finishIcon },false);
-        workout.coords = center;
-        if (workout.path) {
-            const id = Object.values(this.#map._layers).find(l => l.options.id === this.#routingWorkoutId);
-            if (id) {
-                this.#map.removeLayer(id);
-            }
-        }
-        workout.path = path._latlngs;
-        this.#setLocalStorage();
-        this.#handleResetPathClick(e);
-        workoutElement.innerHTML = '';
-        workoutElement.innerHTML = this.#createWorkoutElement(workout, false);
-    }
-    #getDistance(origin, destination) {
-        function toRadian(degree) {
-            return degree * Math.PI / 180;
-        }
-
-        const lon1 = toRadian(origin[1]),
-            lat1 = toRadian(origin[0]),
-            lon2 = toRadian(destination[1]),
-            lat2 = toRadian(destination[0]);
-        const deltaLat = lat2 - lat1;
-        const deltaLon = lon2 - lon1;
-        const a = Math.pow(Math.sin(deltaLat / 2), 2) + Math.cos(lat1) * Math.cos(lat2) * Math.pow(Math.sin(deltaLon / 2), 2);
-        const c = 2 * Math.asin(Math.sqrt(a));
-        const EARTH_RADIUS = 6371;
-        return c * EARTH_RADIUS * 1000;
-
+        return distance.sum / 1000;
     }
     #createIcon(url, size = 40) {
         return new L.icon({
@@ -634,7 +675,7 @@ class App {
         document.querySelector('.leaflet-container').style.cursor = '';
         const el = e.target.closest('.workout');
         const controls = el.querySelector('.workout__route-controls');
-        this.#hideOrShowMarkers();
+        this.#toggleAllWorkouts();
         this.#isRouting ? controls.classList.remove('hidden') : controls.classList.add('hidden');
         this.#map.off('click', this.#add_point_to_map_ref);
         this.#map.on('click', this.#map_ref);
@@ -661,7 +702,7 @@ class App {
     }
 
     #fitAllMarkers(e) {
-        if (!e.target.classList.contains('fit')) return;
+        if (!e.target.classList.contains('fit') || this.#isRouting) return;
         const arr = [...this.#markers.values().map(m => m.marker)];
         const group = new L.featureGroup((arr));
         this.#map.fitBounds(group.getBounds());
