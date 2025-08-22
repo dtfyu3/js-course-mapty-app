@@ -145,6 +145,7 @@ class App {
     #map_ref = this.#showForm.bind(this);
     #handle_workout_ref = this.#handleWorkoutClick.bind(this);
     #add_point_to_map_ref = this.#addPointToPath.bind(this);
+    #remove_point_from_map_ref = this.#removePointFromMap.bind(this);
     constructor() {
         this.#getPosition();
 
@@ -170,6 +171,7 @@ class App {
         const coords = [latitude, longitude];
         this.#layersLinks.forEach(link => {
             const layer = this.#buildLayer(link);
+            // this.#layerControl.addBaseLayer(layer, link.name)
             this.#layers[link.name] = layer;
         });
         this.#map = L.map('map', { maxZoom: this.#maxZoom, layers: this.#layers['OpenStreetMap'] }).setView(coords, this.#mapZoom); //inittin default layer as OpenStreetMap
@@ -486,7 +488,7 @@ class App {
         const marker = this.#markers.get(el.dataset['id']);
         el.remove();
         if (marker) {
-            Object.values(marker).forEach(m => this.#map.removeLayer(m));
+            Object.values(marker).forEach(m => m!= '' ? this.#map.removeLayer(m) : '');
             this.#markers.delete(el.dataset['id']);
         }
         this.#deleteWorkoutPath(this.#workouts[workoutIdx]);
@@ -496,6 +498,7 @@ class App {
             document.querySelector('.fit').remove();
         }
     }
+
     #moveToPopUp(workout) {
         if (this.#isRouting) return;
         this.#map.setView(workout.coords, this.#mapZoom, {
@@ -514,6 +517,13 @@ class App {
                 this.#map.removeLayer(m)
             }
             else { this.#map.addLayer(m) }
+        })
+    }
+    #deleteMarkers(...markers){
+        if(markers.length === 0) return;
+        markers = markers.map(m=>Object.values(m)).flat().filter(f=>f!== '');
+        markers.forEach(m => {
+            if (this.#map.hasLayer(m)) this.#map.removeLayer(m)
         })
     }
     #toggleWorkoutPath(...workouts) {
@@ -550,7 +560,7 @@ class App {
         hideAllMarkers.bind(this)();
 
         function hideAllMarkers() {
-            const markers = [...this.#markers.values()].map(m => [...(Object.values(m,))].filter(v => v != '')).flat();
+            const markers = [...this.#markers.values()].map(m => [...(Object.values(m))].filter(v => v != '')).flat();
             markers.forEach(m => {
                 if (this.#map.hasLayer(m)) this.#map.removeLayer(m)
             })
@@ -562,12 +572,14 @@ class App {
             return;
         }
         if (!form.classList.contains('hidden')) this.#hideForm();
+        const workout = this.#workouts.find(workout => workout.id === this.#routingWorkoutId);
         this.#hideAllWorkouts();
         this.#map.off('click', this.#map_ref);
         this.#map.on('click', this.#add_point_to_map_ref);
+        this.#map.on('contextmenu',this.#remove_point_from_map_ref);
         document.querySelector('.leaflet-container').style.cursor = 'crosshair';
 
-        const workout = this.#workouts.find(workout => workout.id === this.#routingWorkoutId);
+      
         this.#map.setView(workout.coords, 18, {
             animate: true,
             pan: {
@@ -580,6 +592,11 @@ class App {
         const circle = L.circle([lat, lng]).addTo(this.#map);
         this.#path.push(circle);
     }
+    #removePointFromMap(){
+        if(!this.#isRouting || this.#path.length === 0 ) return;
+        this.#map.removeLayer(this.#path.pop());
+        
+    }
     #confirmAPath(e) {
         const workout = this.#workouts.find(w => w.id === this.#routingWorkoutId);
         if (this.#path.length < 2) alert('Pick at least two points on the map!');
@@ -588,6 +605,9 @@ class App {
             return [lat, lng];
         });
         const distance = this.#calculatePathDistance(coords);
+
+        this.#deleteWorkoutPath(workout); //removing previous path
+        this.#deleteMarkers(this.#markers.get(this.#routingWorkoutId)); //removing previous markers
 
         const startIcon = this.#createIcon('icons/start.png');
         const finishIcon = this.#createIcon('icons/finish.png');
@@ -600,8 +620,9 @@ class App {
 
 
         workout.coords = center;
-        this.#deleteWorkoutPath(workout);
+       
         workout.path = path._latlngs;
+        this.#toggleWorkoutPath(workout); //hide path by default, because then toggleAllWorkouts() will be called
         this.#setLocalStorage();
         this.#handleResetPathClick(e);
         workoutElement.innerHTML = '';
@@ -678,6 +699,7 @@ class App {
         this.#toggleAllWorkouts();
         this.#isRouting ? controls.classList.remove('hidden') : controls.classList.add('hidden');
         this.#map.off('click', this.#add_point_to_map_ref);
+        this.#map.off('contextmenu',this.#remove_point_from_map_ref);
         this.#map.on('click', this.#map_ref);
 
     }
